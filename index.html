@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบสอบออนไลน์</title>
+    <title>ระบบสอบออนไลน์ (Online Examination System)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -24,13 +24,27 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
+        /* นำเข้าฟอนต์ TH Sarabun New (ราชการ) */
+        @font-face {
+            font-family: 'TH Sarabun New';
+            src: url('https://cdn.jsdelivr.net/gh/lazywasabi/thai-web-fonts@7/fonts/SarabunNew/THSarabunNew.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'TH Sarabun New';
+            src: url('https://cdn.jsdelivr.net/gh/lazywasabi/thai-web-fonts@7/fonts/SarabunNew/THSarabunNew-Bold.woff2') format('woff2');
+            font-weight: bold;
+            font-style: normal;
+        }
+
         /* ตั้งค่าสัดส่วน 70% และฟอนต์ทางการตามที่ร้องขอ */
         html { 
             font-size: 70%; 
-            font-family: 'Sarabun', sans-serif;
+            font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
         }
         body {
-            font-family: 'Sarabun', sans-serif;
+            font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
             background-color: #f8fafc;
         }
         
@@ -86,7 +100,7 @@
                 const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 const user = users.find(u => u.username === username && u.password === password);
                 if (user) {
-                    return { id: user.id, name: user.name, role: user.role, grade: user.grade, room: user.room, username: user.username };
+                    return { id: user.id, name: user.name, role: user.role, grade: user.grade, room: user.room, username: user.username, password: user.password };
                 }
                 throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
             },
@@ -301,12 +315,62 @@
                 });
                 await batch.commit();
                 return validStudents.length;
+            },
+
+            updateUser: async (userId, updateData) => {
+                const userRef = doc(db, 'exam_users', userId);
+                await updateDoc(userRef, updateData);
             }
         };
 
         // ---------------------------------------------------------
         // UI COMPONENTS
         // ---------------------------------------------------------
+
+        const ProfileModal = ({ user, onClose, onUpdateProfile, onShowNotification }) => {
+            const [name, setName] = useState(user.name || '');
+            const [password, setPassword] = useState(user.password || '');
+            const [isLoading, setIsLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setIsLoading(true);
+                try {
+                    await api.updateUser(user.id, { name, password });
+                    onUpdateProfile({ ...user, name, password });
+                    onShowNotification('อัปเดตข้อมูลส่วนตัวสำเร็จ', 'success');
+                    onClose();
+                } catch (error) {
+                    onShowNotification('เกิดข้อผิดพลาด: ' + error.message, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl transform transition-all animate-in fade-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-extrabold text-slate-800">แก้ไขข้อมูลส่วนตัว</h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 focus:outline-none"><i className="fa-solid fa-xmark text-2xl"></i></button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            <div>
+                                <label className="block text-base font-bold text-slate-700 mb-2">ชื่อ - นามสกุล</label>
+                                <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 transition-all text-lg" />
+                            </div>
+                            <div>
+                                <label className="block text-base font-bold text-slate-700 mb-2">รหัสผ่าน</label>
+                                <input type="text" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 transition-all text-lg" />
+                            </div>
+                            <button type="submit" disabled={isLoading} className="w-full mt-4 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-extrabold text-lg transition-all active:scale-95 shadow-md">
+                                {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังบันทึก...</> : 'บันทึกการเปลี่ยนแปลง'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
 
         const Notification = ({ message, type, onClose }) => {
             if (!message) return null;
@@ -325,49 +389,46 @@
         const InstructionModal = ({ role, onAccept }) => {
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl w-full max-w-2xl p-10 shadow-2xl transform transition-all animate-in fade-in zoom-in duration-300">
-                        <div className="flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 text-blue-600 mx-auto mb-8 shadow-inner">
+                    <div className="bg-white rounded-3xl w-full max-w-lg p-10 shadow-2xl transform transition-all animate-in fade-in zoom-in duration-300">
+                        <div className="flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 text-blue-600 mx-auto mb-8">
                             <i className="fa-solid fa-circle-info text-4xl"></i>
                         </div>
                         <h2 className="text-3xl font-extrabold text-center text-slate-800 mb-8">คำชี้แจงการใช้งานระบบ</h2>
                         
                         {role === 'student' ? (
-                            <div className="space-y-6 text-slate-600 mb-10 text-lg">
-                                <div className="flex items-start p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mr-4 mt-1 flex-shrink-0"></i>
-                                    <p>ระบบจะเริ่มจับเวลา <span className="font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded">ทันที</span> ที่คุณกดปุ่ม "ดาวน์โหลดข้อสอบ" ในหน้ารายวิชา</p>
+                            <div className="space-y-6 text-slate-600 mb-10 font-medium text-lg">
+                                <div className="flex items-start">
+                                    <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mr-4 mt-0.5 flex-shrink-0"></i>
+                                    <p>ระบบจะเริ่มจับเวลา <span className="font-extrabold text-rose-500">ทันที</span> ที่คุณกดปุ่ม "ดาวน์โหลดข้อสอบ"</p>
                                 </div>
-                                <div className="flex items-start p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mr-4 mt-1 flex-shrink-0"></i>
-                                    <p>หากอินเทอร์เน็ตขัดข้องหรือเผลอปิดหน้าเว็บ คุณสามารถล็อกอินเข้ามาทำต่อได้ (แต่เวลาจะยังคงเดินอย่างต่อเนื่องตามเวลาเซิร์ฟเวอร์)</p>
+                                <div className="flex items-start">
+                                    <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mr-4 mt-0.5 flex-shrink-0"></i>
+                                    <p>หากอินเทอร์เน็ตขัดข้องหรือเผลอปิดหน้าเว็บ คุณสามารถล็อกอินเข้ามาทำต่อได้ (แต่เวลาจะยังคงเดินอย่างต่อเนื่อง)</p>
                                 </div>
-                                <div className="flex items-start p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mr-4 mt-1 flex-shrink-0"></i>
-                                    <p>เมื่อกดส่งคำตอบแล้ว จะ<strong className="text-slate-800">ไม่สามารถ</strong>ดาวน์โหลดโจทย์หรือส่งไฟล์ใหม่ได้อีก โปรดตรวจสอบไฟล์ให้ถูกต้องก่อนส่ง</p>
+                                <div className="flex items-start">
+                                    <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mr-4 mt-0.5 flex-shrink-0"></i>
+                                    <p>ตรวจสอบไฟล์คำตอบให้ถูกต้องก่อนกดส่งทุกครั้ง</p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-6 text-slate-600 mb-10 text-lg">
-                                <div className="flex items-start p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <i className="fa-solid fa-circle-check text-indigo-500 text-2xl mr-4 mt-1 flex-shrink-0"></i>
-                                    <p>ผู้สอนต้องเพิ่มรายชื่อนักเรียนเข้าระบบกลาง ก่อนจึงจะสามารถกำหนดสิทธิ์เข้าสอบในแต่ละวิชาได้</p>
+                            <div className="space-y-6 text-slate-600 mb-10 font-medium text-lg">
+                                <div className="flex items-start">
+                                    <i className="fa-solid fa-circle-check text-indigo-500 text-2xl mr-4 mt-0.5 flex-shrink-0"></i>
+                                    <p>ผู้สอนต้องเพิ่มรายชื่อนักเรียนเข้าระบบกลาง ก่อนจึงจะสามารถกำหนดสิทธิ์เข้าสอบได้</p>
                                 </div>
-                                <div className="flex items-start p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <i className="fa-solid fa-circle-check text-indigo-500 text-2xl mr-4 mt-1 flex-shrink-0"></i>
-                                    <p>สามารถอัปโหลดไฟล์ข้อสอบได้หลายชุด (ระบบจะทำการสุ่มแจกให้นักเรียนอัตโนมัติ)</p>
+                                <div className="flex items-start">
+                                    <i className="fa-solid fa-circle-check text-indigo-500 text-2xl mr-4 mt-0.5 flex-shrink-0"></i>
+                                    <p>สามารถอัปโหลดไฟล์ข้อสอบได้หลายชุด ระบบจะทำการสุ่มแจกให้นักเรียนอัตโนมัติ</p>
                                 </div>
-                                <div className="flex items-start p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <i className="fa-solid fa-circle-check text-indigo-500 text-2xl mr-4 mt-1 flex-shrink-0"></i>
+                                <div className="flex items-start">
+                                    <i className="fa-solid fa-circle-check text-indigo-500 text-2xl mr-4 mt-0.5 flex-shrink-0"></i>
                                     <p>ระบบเชื่อมต่อกับฐานข้อมูลเรียบร้อยแล้ว ทุกการกระทำจะถูกบันทึกจริง</p>
                                 </div>
                             </div>
                         )}
 
-                        <button 
-                            onClick={onAccept}
-                            className="w-full py-5 rounded-2xl text-white font-extrabold text-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95"
-                        >
-                            ฉันรับทราบและเข้าใจแล้ว <i className="fa-solid fa-arrow-right ml-2"></i>
+                        <button onClick={onAccept} className="w-full py-5 rounded-2xl text-white font-extrabold text-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-xl shadow-blue-500/30 transition-all active:scale-95">
+                            ฉันรับทราบและเข้าใจแล้ว
                         </button>
                     </div>
                 </div>
@@ -386,7 +447,8 @@
 
             const handleLoginSubmit = async (e) => {
                 e.preventDefault();
-                setIsLoading(true); setError('');
+                setIsLoading(true);
+                setError('');
                 try {
                     const user = await api.login(username, password);
                     onLogin(user);
@@ -399,7 +461,8 @@
 
             const handleRegisterSubmit = async (e) => {
                 e.preventDefault();
-                setIsLoading(true); setError('');
+                setIsLoading(true);
+                setError('');
                 try {
                     await api.registerTeacher({ name: regName, username: regUsername, password: regPassword });
                     setIsRegistering(false);
@@ -414,93 +477,83 @@
             };
 
             return (
-                <div className="flex min-h-screen bg-slate-50 relative overflow-hidden items-center justify-center">
-                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
-                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="flex min-h-screen bg-slate-50 relative overflow-hidden">
+                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-400/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
                     
-                    <div className="w-full max-w-lg p-12 bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white z-10 mx-4">
-                        <div className="text-center mb-10">
-                            <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-3xl mb-8 shadow-xl shadow-blue-500/30 transform rotate-3">
-                                <i className="fa-solid fa-lock text-5xl -rotate-3"></i>
+                    <div className="flex flex-col justify-center items-center w-full z-10 px-4 py-8 animate-in fade-in zoom-in duration-700">
+                        <div className="w-full max-w-lg p-12 bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-white">
+                            <div className="text-center mb-10">
+                                <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-[2rem] mb-8 shadow-xl shadow-blue-500/30 transform rotate-3 hover:rotate-0 transition-all duration-300">
+                                    <i className="fa-solid fa-lock text-4xl -rotate-3 hover:rotate-0"></i>
+                                </div>
+                                <h2 className="text-4xl font-extrabold text-slate-800 tracking-tight">ระบบสอบออนไลน์</h2>
+                                <p className="text-slate-500 mt-4 font-bold text-lg">
+                                    {isRegistering ? 'สร้างบัญชีผู้ดูแลระบบ (ครูผู้สอน)' : 'เข้าสู่ระบบเพื่อดำเนินการต่อ'}
+                                </p>
                             </div>
-                            <h2 className="text-4xl font-extrabold text-slate-800 tracking-tight">ระบบสอบออนไลน์</h2>
-                            <p className="text-slate-500 mt-4 font-medium text-lg">
-                                {isRegistering ? 'สร้างบัญชีผู้ดูแลระบบ (ครูผู้สอน)' : 'เข้าสู่ระบบเพื่อดำเนินการต่อ'}
-                            </p>
-                        </div>
-                        
-                        {error && (
-                            <div className={`mb-8 p-5 text-base font-semibold rounded-2xl flex items-center border ${error.includes('สำเร็จ') ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                                <i className={`fa-solid ${error.includes('สำเร็จ') ? 'fa-circle-check' : 'fa-circle-exclamation'} text-xl mr-3 flex-shrink-0`}></i>
-                                {error}
-                            </div>
-                        )}
+                            
+                            {error && (
+                                <div className={`mb-8 p-5 text-base font-bold rounded-2xl flex items-center border ${error.includes('สำเร็จ') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                                    <i className={`fa-solid ${error.includes('สำเร็จ') ? 'fa-circle-check' : 'fa-circle-exclamation'} text-2xl mr-3 flex-shrink-0`}></i>
+                                    {error}
+                                </div>
+                            )}
 
-                        {!isRegistering ? (
-                            <form onSubmit={handleLoginSubmit} className="space-y-6">
-                                <div>
-                                    <label className="block text-base font-bold text-slate-700 mb-2">รหัสผู้ใช้งาน</label>
-                                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                                        className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-semibold text-lg transition-all outline-none"
-                                        placeholder="Username / รหัสนักเรียน" required />
-                                </div>
-                                <div>
-                                    <label className="block text-base font-bold text-slate-700 mb-2">รหัสผ่าน</label>
-                                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-semibold text-lg transition-all outline-none"
-                                        placeholder="••••••" required />
-                                </div>
-                                <button type="submit" disabled={isLoading}
-                                    className={`w-full py-5 mt-4 rounded-2xl text-white font-extrabold text-xl transition-all ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-xl hover:shadow-indigo-500/30 active:scale-[0.98]'}`}
-                                >
-                                    {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังเข้าสู่ระบบ...</> : 'เข้าสู่ระบบ'}
-                                </button>
-                                
-                                <div className="text-center pt-6 border-t border-slate-100">
-                                    <button type="button" onClick={() => { setIsRegistering(true); setError(''); }} className="text-base font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
-                                        ระบบใหม่ยังไม่มีบัญชี? ลงทะเบียนครูผู้สอน
+                            {!isRegistering ? (
+                                <form onSubmit={handleLoginSubmit} className="space-y-6">
+                                    <div>
+                                        <label className="block text-base font-bold text-slate-700 mb-3">รหัสผู้ใช้งาน</label>
+                                        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-bold text-lg outline-none transition-all" placeholder="Username" required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-base font-bold text-slate-700 mb-3">รหัสผ่าน</label>
+                                        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-bold text-lg outline-none transition-all" placeholder="••••••" required />
+                                    </div>
+                                    <button type="submit" disabled={isLoading} className={`w-full py-5 mt-4 rounded-2xl text-white font-extrabold text-xl transition-all ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-2xl hover:shadow-indigo-500/40 active:scale-[0.98]'}`}>
+                                        {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังเข้าสู่ระบบ...</> : 'เข้าสู่ระบบ'}
                                     </button>
-                                </div>
-                            </form>
-                        ) : (
-                            <form onSubmit={handleRegisterSubmit} className="space-y-6">
-                                <div>
-                                    <label className="block text-base font-bold text-slate-700 mb-2">ชื่อ - นามสกุล (ครูผู้สอน)</label>
-                                    <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)}
-                                        className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 font-semibold text-lg transition-all outline-none"
-                                        placeholder="อ.ใจดี มีเวลาให้" required />
-                                </div>
-                                <div>
-                                    <label className="block text-base font-bold text-slate-700 mb-2">ตั้ง Username สำหรับ Login</label>
-                                    <input type="text" value={regUsername} onChange={(e) => setRegUsername(e.target.value)}
-                                        className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 font-semibold text-lg transition-all outline-none"
-                                        placeholder="teacher1" required />
-                                </div>
-                                <div>
-                                    <label className="block text-base font-bold text-slate-700 mb-2">ตั้งรหัสผ่าน</label>
-                                    <input type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)}
-                                        className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 font-semibold text-lg transition-all outline-none"
-                                        placeholder="••••••" required />
-                                </div>
-                                <button type="submit" disabled={isLoading}
-                                    className={`w-full py-5 mt-4 rounded-2xl text-white font-extrabold text-xl transition-all ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:shadow-xl hover:shadow-emerald-500/30 active:scale-[0.98]'}`}
-                                >
-                                    {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังสร้างบัญชี...</> : 'ยืนยันการลงทะเบียน'}
-                                </button>
-                                
-                                <div className="text-center pt-6 border-t border-slate-100">
-                                    <button type="button" onClick={() => { setIsRegistering(false); setError(''); }} className="text-base font-semibold text-slate-500 hover:text-slate-800 transition-colors">
-                                        มีบัญชีอยู่แล้ว กลับไปหน้าเข้าสู่ระบบ
+                                    
+                                    <div className="text-center pt-6">
+                                        <button type="button" onClick={() => { setIsRegistering(true); setError(''); }} className="text-base font-extrabold text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 px-6 py-2 rounded-full">
+                                            ลงทะเบียนครูผู้สอน (สำหรับเริ่มต้นระบบ)
+                                        </button>
+                                    </div>
+                                </form>
+                            ) : (
+                                <form onSubmit={handleRegisterSubmit} className="space-y-6">
+                                    <div>
+                                        <label className="block text-base font-bold text-slate-700 mb-3">ชื่อ - นามสกุล (ครูผู้สอน)</label>
+                                        <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 font-bold text-lg outline-none transition-all" placeholder="เช่น อ.ใจดี มีเวลาให้" required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-base font-bold text-slate-700 mb-3">ตั้ง Username สำหรับ Login</label>
+                                        <input type="text" value={regUsername} onChange={(e) => setRegUsername(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 font-bold text-lg outline-none transition-all" placeholder="teacher1" required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-base font-bold text-slate-700 mb-3">ตั้งรหัสผ่าน</label>
+                                        <input type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 font-bold text-lg outline-none transition-all" placeholder="••••••" required />
+                                    </div>
+                                    <button type="submit" disabled={isLoading} className={`w-full py-5 mt-4 rounded-2xl text-white font-extrabold text-xl transition-all ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:shadow-2xl hover:shadow-emerald-500/40 active:scale-[0.98]'}`}>
+                                        {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังสร้างบัญชี...</> : 'ยืนยันการลงทะเบียน'}
                                     </button>
-                                </div>
-                            </form>
-                        )}
+                                    
+                                    <div className="text-center pt-6">
+                                        <button type="button" onClick={() => { setIsRegistering(false); setError(''); }} className="text-base font-extrabold text-slate-500 hover:text-slate-700 transition-colors bg-slate-100 px-6 py-2 rounded-full">
+                                            มีบัญชีอยู่แล้ว กลับไปหน้าเข้าสู่ระบบ
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
                     </div>
                 </div>
             );
         };
 
-        const DashboardView = ({ user, exams, onStartExam, onLogout }) => {
+        const DashboardView = ({ user, exams, onStartExam, onLogout, onUpdateUser, onShowNotification }) => {
+            const [showProfile, setShowProfile] = useState(false);
+
             return (
                 <div className="max-w-6xl mx-auto p-6 md:p-10 min-h-screen">
                     <div className="flex flex-col md:flex-row justify-between items-center mb-10 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
@@ -513,9 +566,14 @@
                                 <p className="text-slate-500 mt-2 font-semibold text-lg">ระดับชั้น: <span className="text-slate-700">{user.grade}</span> | ห้อง: <span className="text-slate-700">{user.room}</span></p>
                             </div>
                         </div>
-                        <button onClick={onLogout} className="mt-6 md:mt-0 flex items-center px-6 py-4 text-slate-600 font-bold text-lg hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all active:scale-95 border border-transparent hover:border-rose-100">
-                            <i className="fa-solid fa-right-from-bracket mr-3 text-xl"></i> ออกจากระบบ
-                        </button>
+                        <div className="flex gap-4 mt-6 md:mt-0">
+                            <button onClick={() => setShowProfile(true)} className="flex items-center px-6 py-4 text-slate-600 font-bold text-lg hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all active:scale-95 border border-transparent hover:border-indigo-100">
+                                <i className="fa-solid fa-user-pen mr-3 text-xl"></i> แก้ไขข้อมูล
+                            </button>
+                            <button onClick={onLogout} className="flex items-center px-6 py-4 text-slate-600 font-bold text-lg hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all active:scale-95 border border-transparent hover:border-rose-100">
+                                <i className="fa-solid fa-right-from-bracket mr-3 text-xl"></i> ออกจากระบบ
+                            </button>
+                        </div>
                     </div>
 
                     <div className="mb-8 flex items-center">
@@ -573,6 +631,7 @@
                             </div>
                         )}
                     </div>
+                    {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} onUpdateProfile={onUpdateUser} onShowNotification={onShowNotification} />}
                 </div>
             );
         };
@@ -804,16 +863,20 @@
             );
         };
 
-        const TeacherDashboardView = ({ user, onLogout, onShowNotification }) => {
+        const TeacherDashboardView = ({ user, onLogout, onShowNotification, onUpdateUser }) => {
             const [activeTab, setActiveTab] = useState('exams'); 
             const [exams, setExams] = useState([]);
             const [examView, setExamView] = useState('list'); 
             const [selectedExam, setSelectedExam] = useState(null);
             const [results, setResults] = useState([]);
+            
             const [students, setStudents] = useState([]);
             const [studentView, setStudentView] = useState('list'); 
+            const [editingStudent, setEditingStudent] = useState(null);
+            
             const [isLoading, setIsLoading] = useState(false);
             const [isPageLoading, setIsPageLoading] = useState(true);
+            const [showProfile, setShowProfile] = useState(false);
             
             // Create Exam State
             const [newTitle, setNewTitle] = useState('');
@@ -853,99 +916,22 @@
                 }
             };
 
-            const handleCreateExam = async (e) => {
+            const handleUpdateStudent = async (e) => {
                 e.preventDefault();
-                if(selectedStudentIds.length === 0) return onShowNotification('กรุณาเลือกนักเรียนเข้าสอบอย่างน้อย 1 คน', 'error');
                 setIsLoading(true);
                 try {
-                    await api.createExam({
-                        title: newTitle, description: newDesc, durationMinutes: Number(newDuration),
-                        fileSets: examFiles.length > 0 ? examFiles : ['ExamFile_Default.pdf'],
-                        allowLateSubmission: allowLate, allowedStudentIds: selectedStudentIds
+                    await api.updateUser(editingStudent.id, {
+                        name: editingStudent.name,
+                        password: editingStudent.password,
+                        grade: editingStudent.grade,
+                        room: editingStudent.room
                     });
-                    onShowNotification('นำข้อสอบเข้าระบบพร้อมกำหนดสิทธิ์นักเรียนเรียบร้อย', 'success');
-                    setExamView('list');
-                    setNewTitle(''); setNewDesc(''); setNewDuration(60); setSelectedStudentIds([]); setExamFiles([]); setAllowLate(false);
-                    loadData();
-                } catch (err) {
-                    onShowNotification('เกิดข้อผิดพลาดในการสร้างข้อสอบ', 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const handleViewResults = async (exam) => {
-                setSelectedExam(exam);
-                setExamView('results');
-                setIsLoading(true);
-                try {
-                    const data = await api.getExamResults(exam.id);
-                    setResults(data);
-                } catch (error) {
-                    onShowNotification('ไม่สามารถโหลดผลสอบได้', 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const handleSaveScore = async (submissionId, score) => {
-                try {
-                    await api.updateScore(submissionId, score);
-                    onShowNotification('บันทึกคะแนนเรียบร้อย', 'success');
-                    handleViewResults(selectedExam); 
-                } catch (err) {
-                    onShowNotification('เกิดข้อผิดพลาดในการบันทึกคะแนน', 'error');
-                }
-            };
-
-            const handleExportCSV = () => {
-                const header = "รหัส,ชื่อ-สกุล,ชั้น/ห้อง,สถานะ,ชื่อไฟล์,คะแนน\n";
-                const rows = results.map(r => {
-                    const scoreStr = r.submission?.score !== null && r.submission?.score !== undefined ? r.submission.score : '';
-                    return `"${r.studentId}","${r.studentName}","${r.grade}/${r.room}","${r.status}","${r.submission ? r.submission.fileName : '-'}","${scoreStr}"`;
-                }).join("\n");
-                
-                const bom = "\uFEFF";
-                const csvContent = bom + header + rows;
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                
-                const link = document.createElement("a");
-                link.setAttribute("href", url);
-                link.setAttribute("download", `คะแนนสอบ_${selectedExam.title}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            const handleAddStudent = async (e) => {
-                e.preventDefault();
-                setIsLoading(true);
-                try {
-                    if (studentInputMode === 'single') {
-                        await api.addStudent({
-                            username: newStudentUsername, name: newStudentName, password: newStudentPassword,
-                            grade: newStudentGrade, room: newStudentRoom
-                        });
-                        onShowNotification('เพิ่มนักเรียนเข้าระบบเรียบร้อย', 'success');
-                        setNewStudentUsername(''); setNewStudentName(''); setNewStudentPassword('1234'); setNewStudentGrade(''); setNewStudentRoom('');
-                    } else {
-                        if (!csvData) throw new Error('กรุณาอัปโหลดไฟล์ CSV');
-                        
-                        const rows = csvData.split('\n').map(r => r.trim()).filter(r => r.length > 0);
-                        const parsedStudents = rows.map(row => {
-                            const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-                            return { username: cols[0], name: cols[1], grade: cols[2], room: cols[3], password: cols[4] };
-                        }).filter(s => s.username !== 'รหัสผู้ใช้'); 
-                        
-                        const addedCount = await api.bulkAddStudents(parsedStudents);
-                        onShowNotification(`เพิ่มนักเรียนสำเร็จ ${addedCount} คน (ข้ามรายการที่รหัสซ้ำ)`, 'success');
-                        setCsvData('');
-                    }
+                    onShowNotification('อัปเดตข้อมูลนักเรียนเรียบร้อย', 'success');
                     setStudentView('list');
+                    setEditingStudent(null);
                     loadData();
                 } catch (err) {
-                    onShowNotification(err.message, 'error');
+                    onShowNotification('เกิดข้อผิดพลาด: ' + err.message, 'error');
                 } finally {
                     setIsLoading(false);
                 }
@@ -963,6 +949,58 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+            };
+
+            const handleAddStudent = async (e) => {
+                e.preventDefault();
+                setIsLoading(true);
+                try {
+                    await api.addStudent({
+                        username: newStudentUsername, name: newStudentName, password: newStudentPassword,
+                        grade: newStudentGrade, room: newStudentRoom
+                    });
+                    onShowNotification('เพิ่มนักเรียนเข้าระบบเรียบร้อย', 'success');
+                    setStudentView('list');
+                    setNewStudentUsername(''); setNewStudentName(''); setNewStudentPassword('1234');
+                    loadData();
+                } catch (err) {
+                    onShowNotification(err.message, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const handleBulkImport = async () => {
+                if (!csvData) return;
+                setIsLoading(true);
+                try {
+                    const rows = csvData.split('\n').map(row => row.trim()).filter(row => row);
+                    const startIndex = rows[0].includes('รหัส') ? 1 : 0;
+                    const studentsToAdd = [];
+                    
+                    for (let i = startIndex; i < rows.length; i++) {
+                        const cols = rows[i].split(',').map(c => c.trim());
+                        if (cols.length >= 2) {
+                            studentsToAdd.push({
+                                username: cols[0],
+                                name: cols[1],
+                                grade: cols[2] || '-',
+                                room: cols[3] || '-',
+                                password: cols[4] || '1234'
+                            });
+                        }
+                    }
+
+                    const count = await api.bulkAddStudents(studentsToAdd);
+                    onShowNotification(`นำเข้านักเรียนสำเร็จ ${count} รายการ`, 'success');
+                    setStudentView('list');
+                    setCsvData('');
+                    loadData();
+                } catch (err) {
+                    onShowNotification('เกิดข้อผิดพลาด: ' + err.message, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
             };
 
             // Enrollment Filtering Logic
@@ -989,12 +1027,17 @@
                             </h1>
                             <div className="text-slate-300 font-semibold text-lg flex items-center">
                                 <span className="w-3 h-3 rounded-full bg-emerald-400 mr-3 shadow-[0_0_10px_rgba(52,211,153,0.8)] block"></span>
-                                บัญชีผู้ดูแลระบบ: <strong className="ml-2 text-white">{user.name}</strong>
+                                <div>บัญชีผู้ดูแลระบบ: <strong className="ml-2 text-white">{user.name}</strong></div>
                             </div>
                         </div>
-                        <button onClick={onLogout} className="mt-8 md:mt-0 relative z-10 flex items-center px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl font-extrabold text-lg transition-all border border-white/20 shadow-lg active:scale-95">
-                            <i className="fa-solid fa-right-from-bracket mr-3 text-xl"></i> ออกจากระบบ
-                        </button>
+                        <div className="mt-8 md:mt-0 flex gap-4 relative z-10">
+                            <button onClick={() => setShowProfile(true)} className="flex items-center px-6 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl font-extrabold text-lg transition-all border border-white/20 shadow-lg active:scale-95">
+                                <i className="fa-solid fa-user-pen mr-3 text-xl"></i> ข้อมูลส่วนตัว
+                            </button>
+                            <button onClick={onLogout} className="flex items-center px-6 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl font-extrabold text-lg transition-all border border-white/20 shadow-lg active:scale-95">
+                                <i className="fa-solid fa-right-from-bracket mr-3 text-xl"></i> ออกจากระบบ
+                            </button>
+                        </div>
                     </div>
 
                     {/* Tabs */}
@@ -1321,6 +1364,7 @@
                                                                 <th className="p-6 font-extrabold text-slate-700 uppercase text-sm tracking-wider">ชั้น</th>
                                                                 <th className="p-6 font-extrabold text-slate-700 uppercase text-sm tracking-wider">ห้อง</th>
                                                                 <th className="p-6 font-extrabold text-slate-700 uppercase text-sm tracking-wider">รหัสผ่าน</th>
+                                                                <th className="p-6 font-extrabold text-slate-700 uppercase text-sm tracking-wider text-right">จัดการ</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -1331,12 +1375,63 @@
                                                                     <td className="p-6 text-slate-600 font-bold text-base bg-slate-50/50">{student.grade}</td>
                                                                     <td className="p-6 text-slate-600 font-bold text-base bg-slate-50/50">{student.room}</td>
                                                                     <td className="p-6 text-slate-500 font-mono font-bold text-base">{student.password}</td>
+                                                                    <td className="p-6 text-right">
+                                                                        <button onClick={() => { setEditingStudent(student); setStudentView('edit'); }} className="inline-flex items-center px-5 py-2.5 bg-slate-50 text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 rounded-xl font-bold transition-all text-sm active:scale-95 shadow-sm">
+                                                                            <i className="fa-solid fa-pen-to-square mr-2"></i> แก้ไข
+                                                                        </button>
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
                                                     </table>
                                                     {students.length === 0 && <div className="text-center text-slate-400 py-16 font-bold text-xl bg-slate-50/50">ยังไม่มีข้อมูลนักเรียนในระบบ กรุณากด "นำนักเรียนเข้าระบบ"</div>}
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {studentView === 'edit' && editingStudent && (
+                                            <div className="max-w-4xl mx-auto animate-in slide-in-from-right-8 duration-300">
+                                                <div className="flex items-center mb-10 border-b border-slate-100 pb-8">
+                                                    <button onClick={() => {setStudentView('list'); setEditingStudent(null);}} className="p-4 mr-6 rounded-2xl bg-slate-50 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors border border-slate-200">
+                                                        <i className="fa-solid fa-arrow-left text-2xl"></i>
+                                                    </button>
+                                                    <div>
+                                                        <h2 className="text-3xl font-extrabold text-slate-800">แก้ไขข้อมูลนักเรียน</h2>
+                                                    </div>
+                                                </div>
+                                                
+                                                <form onSubmit={handleUpdateStudent} className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+                                                    <div className="absolute top-0 left-0 w-full h-2 bg-amber-500"></div>
+                                                    
+                                                    <div className="space-y-6">
+                                                        <div>
+                                                            <label className="block text-base font-bold text-slate-700 mb-3">รหัสประจำตัว (Username) <span className="text-sm font-normal text-rose-500 ml-2">*ไม่สามารถแก้ไขได้</span></label>
+                                                            <input type="text" disabled value={editingStudent.username} className="w-full px-6 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 text-lg cursor-not-allowed" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-base font-bold text-slate-700 mb-3">ชื่อ-นามสกุล</label>
+                                                            <input type="text" required value={editingStudent.name} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-bold text-slate-800 text-lg transition-all" />
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-8">
+                                                            <div>
+                                                                <label className="block text-base font-bold text-slate-700 mb-3">ระดับชั้น</label>
+                                                                <input type="text" required value={editingStudent.grade} onChange={e => setEditingStudent({...editingStudent, grade: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-bold text-slate-800 text-lg transition-all" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-base font-bold text-slate-700 mb-3">ห้อง</label>
+                                                                <input type="text" required value={editingStudent.room} onChange={e => setEditingStudent({...editingStudent, room: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-bold text-slate-800 text-lg transition-all" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-base font-bold text-slate-700 mb-3">รหัสผ่าน</label>
+                                                            <input type="text" required value={editingStudent.password} onChange={e => setEditingStudent({...editingStudent, password: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-bold text-slate-800 text-lg transition-all" />
+                                                        </div>
+                                                    </div>
+
+                                                    <button type="submit" disabled={isLoading} className="w-full mt-10 py-5 text-white rounded-2xl font-extrabold text-xl transition-all active:scale-95 shadow-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:shadow-amber-500/40">
+                                                        {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังบันทึก...</> : 'บันทึกการเปลี่ยนแปลง'}
+                                                    </button>
+                                                </form>
                                             </div>
                                         )}
 
@@ -1348,89 +1443,74 @@
                                                     </button>
                                                     <div>
                                                         <h2 className="text-3xl font-extrabold text-slate-800">เพิ่มรายชื่อนักเรียนใหม่</h2>
+                                                        <p className="text-slate-500 font-semibold mt-2 text-lg">เลือกลงทะเบียนทีละคน หรือนำเข้าจากไฟล์ Excel/CSV</p>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex mb-8 bg-slate-100 p-2 rounded-2xl shadow-inner border border-slate-200">
-                                                    <button onClick={() => setStudentInputMode('single')} className={`flex-1 py-4 px-6 rounded-xl font-extrabold text-lg transition-all ${studentInputMode === 'single' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>เพิ่มทีละคน</button>
-                                                    <button onClick={() => setStudentInputMode('bulk')} className={`flex-1 py-4 px-6 rounded-xl font-extrabold text-lg transition-all ${studentInputMode === 'bulk' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>เพิ่มหลายคน (Excel / CSV)</button>
+                                                <div className="flex mb-8 bg-slate-100 p-2 rounded-2xl w-fit">
+                                                    <button type="button" onClick={() => setStudentInputMode('single')} className={`px-6 py-3 rounded-xl font-extrabold text-base transition-all ${studentInputMode === 'single' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>เพิ่มทีละคน</button>
+                                                    <button type="button" onClick={() => setStudentInputMode('bulk')} className={`px-6 py-3 rounded-xl font-extrabold text-base transition-all ${studentInputMode === 'bulk' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>นำเข้าหลายคน (CSV)</button>
                                                 </div>
-                                                
-                                                <form onSubmit={handleAddStudent} className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-                                                    <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
-                                                    
-                                                    {studentInputMode === 'single' ? (
+
+                                                {studentInputMode === 'single' ? (
+                                                    <form onSubmit={handleAddStudent} className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+                                                        <div className="absolute top-0 left-0 w-full h-2 bg-indigo-500"></div>
                                                         <div className="space-y-6">
                                                             <div>
                                                                 <label className="block text-base font-bold text-slate-700 mb-3">รหัสประจำตัว (Username)</label>
-                                                                <input type="text" required value={newStudentUsername} onChange={e => setNewStudentUsername(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น 64001"/>
+                                                                <input type="text" required value={newStudentUsername} onChange={e => setNewStudentUsername(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น 64001"/>
                                                             </div>
                                                             <div>
                                                                 <label className="block text-base font-bold text-slate-700 mb-3">ชื่อ-นามสกุล</label>
-                                                                <input type="text" required value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="ชื่อ นามสกุล" />
+                                                                <input type="text" required value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น เด็กชายเรียนดี มีวินัย" />
                                                             </div>
                                                             <div className="grid grid-cols-2 gap-8">
                                                                 <div>
                                                                     <label className="block text-base font-bold text-slate-700 mb-3">ระดับชั้น</label>
-                                                                    <input type="text" required value={newStudentGrade} onChange={e => setNewStudentGrade(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น ม.4" />
+                                                                    <input type="text" value={newStudentGrade} onChange={e => setNewStudentGrade(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น ม.4" />
                                                                 </div>
                                                                 <div>
                                                                     <label className="block text-base font-bold text-slate-700 mb-3">ห้อง</label>
-                                                                    <input type="text" required value={newStudentRoom} onChange={e => setNewStudentRoom(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น 1" />
+                                                                    <input type="text" value={newStudentRoom} onChange={e => setNewStudentRoom(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-lg transition-all" placeholder="เช่น 1" />
                                                                 </div>
                                                             </div>
                                                             <div>
-                                                                <label className="block text-base font-bold text-slate-700 mb-3">ตั้งรหัสผ่านสำหรับเข้าสอบ</label>
-                                                                <input type="text" required value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-bold text-slate-800 text-lg transition-all" />
+                                                                <label className="block text-base font-bold text-slate-700 mb-3">ตั้งรหัสผ่านเริ่มต้น</label>
+                                                                <input type="text" required value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-lg transition-all" />
                                                             </div>
                                                         </div>
-                                                    ) : (
-                                                        <div className="space-y-6">
-                                                            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 mb-6 flex items-start">
-                                                                <i className="fa-solid fa-circle-info text-blue-500 text-2xl mr-4 mt-1"></i>
-                                                                <div>
-                                                                    <p className="text-blue-800 font-bold text-lg mb-2">วิธีนำเข้าข้อมูล (Bulk Import)</p>
-                                                                    <ol className="list-decimal list-inside text-blue-700 font-semibold space-y-2">
-                                                                        <li>คลิกปุ่มดาวน์โหลดเทมเพลตด้านล่าง</li>
-                                                                        <li>เปิดไฟล์ใน Excel หรือ Google Sheets เพื่อกรอกข้อมูล</li>
-                                                                        <li>บันทึกไฟล์เป็น .csv (UTF-8) แล้วอัปโหลดกลับเข้าระบบ</li>
-                                                                    </ol>
-                                                                </div>
-                                                            </div>
-                                                            <button type="button" onClick={handleDownloadTemplate} className="w-full py-4 bg-white border-2 border-indigo-200 text-indigo-700 rounded-2xl font-extrabold text-lg hover:bg-indigo-50 transition-all flex items-center justify-center mb-6">
-                                                                <i className="fa-solid fa-file-csv mr-3 text-xl"></i> ดาวน์โหลดไฟล์เทมเพลต (student_template.csv)
+                                                        <button type="submit" disabled={isLoading} className="w-full mt-10 py-5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-extrabold text-xl transition-all shadow-xl shadow-indigo-600/20 active:scale-95">
+                                                            {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังบันทึก...</> : 'บันทึกข้อมูลนักเรียน'}
+                                                        </button>
+                                                    </form>
+                                                ) : (
+                                                    <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+                                                        <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+                                                        <div className="mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                                                            <h3 className="text-xl font-extrabold text-slate-800 mb-2">1. ดาวน์โหลดไฟล์ต้นแบบ</h3>
+                                                            <p className="text-slate-600 font-medium mb-4">ดาวน์โหลดไฟล์ CSV นี้ไปเปิดใน Excel แล้วกรอกข้อมูลนักเรียนให้ครบตามคอลัมน์ จากนั้นบันทึกเป็นไฟล์ .csv เพื่อนำมาอัปโหลด</p>
+                                                            <button type="button" onClick={handleDownloadTemplate} className="px-6 py-3 bg-white border-2 border-slate-200 text-slate-700 font-extrabold rounded-xl hover:bg-slate-100 transition-colors active:scale-95 shadow-sm">
+                                                                <i className="fa-solid fa-download mr-2"></i> โหลดเทมเพลต (student_template.csv)
                                                             </button>
-                                                            
-                                                            <label className="block text-base font-bold text-slate-700 mb-4">อัปโหลดไฟล์ CSV ที่กรอกข้อมูลแล้ว</label>
-                                                            <div className="relative">
-                                                                <input type="file" accept=".csv" onChange={(e) => {
-                                                                    const file = e.target.files[0];
-                                                                    if (file) {
-                                                                        const reader = new FileReader();
-                                                                        reader.onload = (event) => setCsvData(event.target.result);
-                                                                        reader.readAsText(file);
-                                                                    }
-                                                                }} className="block w-full text-base text-slate-500 file:mr-6 file:py-4 file:px-8 file:rounded-2xl file:border-0 file:text-base file:font-extrabold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer file:transition-colors file:shadow-sm" />
-                                                            </div>
-
-                                                            {csvData && (
-                                                                <div className="mt-6 border border-slate-200 rounded-2xl overflow-hidden shadow-inner bg-slate-50">
-                                                                    <div className="p-4 bg-slate-100 border-b border-slate-200 font-extrabold text-slate-700 text-sm flex items-center">
-                                                                        <i className="fa-solid fa-eye mr-2 text-indigo-500"></i> ตัวอย่างข้อมูลที่อ่านได้ (ตรวจสอบก่อนบันทึก)
-                                                                    </div>
-                                                                    <div className="max-h-64 overflow-y-auto p-4 font-mono text-sm whitespace-pre text-slate-600 bg-white">
-                                                                        {csvData.split('\n').slice(0, 5).join('\n')}
-                                                                        {csvData.split('\n').length > 5 && '\n... (มีข้อมูลอีก)'}
-                                                                    </div>
-                                                                </div>
-                                                            )}
                                                         </div>
-                                                    )}
 
-                                                    <button type="submit" disabled={isLoading || (studentInputMode === 'bulk' && !csvData)} className={`w-full mt-10 py-5 text-white rounded-2xl font-extrabold text-xl transition-all active:scale-95 shadow-xl ${isLoading || (studentInputMode === 'bulk' && !csvData) ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:shadow-emerald-500/40'}`}>
-                                                        {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังบันทึก...</> : (studentInputMode === 'single' ? 'เพิ่มนักเรียนเข้าสู่ระบบ' : 'ยืนยันการนำเข้าข้อมูล')}
-                                                    </button>
-                                                </form>
+                                                        <div>
+                                                            <h3 className="text-xl font-extrabold text-slate-800 mb-4">2. อัปโหลดไฟล์ CSV</h3>
+                                                            <input type="file" accept=".csv" onChange={(e) => {
+                                                                const file = e.target.files[0];
+                                                                if (file) {
+                                                                    const reader = new FileReader();
+                                                                    reader.onload = (event) => setCsvData(event.target.result);
+                                                                    reader.readAsText(file);
+                                                                }
+                                                            }} className="block w-full text-base text-slate-500 file:mr-6 file:py-3 file:px-8 file:rounded-2xl file:border-0 file:text-base file:font-extrabold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer file:transition-colors file:shadow-sm mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200" />
+                                                            
+                                                            <button type="button" onClick={handleBulkImport} disabled={!csvData || isLoading} className={`w-full py-5 rounded-2xl font-extrabold text-xl transition-all shadow-xl active:scale-95 ${!csvData || isLoading ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20'}`}>
+                                                                {isLoading ? <><i className="fa-solid fa-spinner animate-spin mr-2"></i> กำลังนำเข้าข้อมูล...</> : <><i className="fa-solid fa-cloud-arrow-up mr-2"></i> เริ่มนำเข้าข้อมูล</>}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </>
@@ -1438,6 +1518,7 @@
                             </>
                         )}
                     </div>
+                    {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} onUpdateProfile={onUpdateUser} onShowNotification={onShowNotification} />}
                 </div>
             );
         };
@@ -1494,6 +1575,10 @@
                 setShowInstructions(false);
             };
 
+            const handleUpdateUser = (updatedUser) => {
+                setUser(updatedUser);
+            };
+
             const handleEnterExamRoom = (exam) => {
                 setActiveExam(exam);
                 setActiveSession(exam.session || null);
@@ -1527,11 +1612,11 @@
                     )}
 
                     {currentView === 'teacher_dashboard' && user?.role === 'teacher' && !showInstructions && (
-                        <TeacherDashboardView user={user} onLogout={handleLogout} onShowNotification={showNotification} />
+                        <TeacherDashboardView user={user} onLogout={handleLogout} onShowNotification={showNotification} onUpdateUser={handleUpdateUser} />
                     )}
                     
                     {currentView === 'dashboard' && user?.role === 'student' && !showInstructions && (
-                        <DashboardView user={user} exams={exams} onStartExam={handleEnterExamRoom} onLogout={handleLogout} />
+                        <DashboardView user={user} exams={exams} onStartExam={handleEnterExamRoom} onLogout={handleLogout} onShowNotification={showNotification} onUpdateUser={handleUpdateUser} />
                     )}
 
                     {currentView === 'exam' && user && activeExam && !showInstructions && (

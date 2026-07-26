@@ -11,11 +11,6 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Google Fonts: Sarabun -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -41,11 +36,14 @@
         /* ตั้งค่าสัดส่วน 70% และฟอนต์ทางการตามที่ร้องขอ */
         html { 
             font-size: 70%; 
-            font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
+            font-family: 'TH Sarabun New', sans-serif;
         }
         body {
-            font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
+            font-family: 'TH Sarabun New', sans-serif;
             background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
         }
         
         /* Custom Checkbox Animation */
@@ -71,13 +69,10 @@
         const { useState, useEffect, useRef } = React;
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-        // ---------------------------------------------------------
-        // FIREBASE CONFIGURATION
-        // ---------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyACCbQAf5PkWe4J-IZoHF_8iF5Y4-kufw4",
             authDomain: "exam-tp-4339b.firebaseapp.com",
@@ -195,9 +190,14 @@
 
                 let fileUrl = '';
                 if (fileObject) {
-                    const storageRef = ref(storage, `submissions/${sessionId}_${Date.now()}_${fileObject.name}`);
-                    await uploadBytes(storageRef, fileObject);
-                    fileUrl = await getDownloadURL(storageRef);
+                    try {
+                        const storageRef = ref(storage, `submissions/${sessionId}_${Date.now()}_${fileObject.name}`);
+                        await uploadBytes(storageRef, fileObject);
+                        fileUrl = await getDownloadURL(storageRef);
+                    } catch (uploadError) {
+                        console.error("Upload Error:", uploadError);
+                        throw new Error(`อัปโหลดไฟล์ล้มเหลว: ${uploadError.message} (หากเปิดเว็บแบบ file:/// กรุณาใช้งานผ่าน Live Server)`);
+                    }
                 }
 
                 const submission = {
@@ -216,11 +216,16 @@
             createExam: async (examData, fileObjects) => {
                 const fileSets = [];
                 if (fileObjects && fileObjects.length > 0) {
-                    for (const file of fileObjects) {
-                        const storageRef = ref(storage, `exams/${Date.now()}_${file.name}`);
-                        await uploadBytes(storageRef, file);
-                        const url = await getDownloadURL(storageRef);
-                        fileSets.push({ name: file.name, url: url });
+                    try {
+                        for (const file of fileObjects) {
+                            const storageRef = ref(storage, `exams/${Date.now()}_${file.name}`);
+                            await uploadBytes(storageRef, file);
+                            const url = await getDownloadURL(storageRef);
+                            fileSets.push({ name: file.name, url: url });
+                        }
+                    } catch (uploadError) {
+                        console.error("Upload Error:", uploadError);
+                        throw new Error(`อัปโหลดข้อสอบล้มเหลว: ${uploadError.message} (หากเปิดเว็บแบบ file:/// กรุณาใช้งานผ่าน Live Server)`);
                     }
                 } else {
                     fileSets.push({ name: 'Default_Exam.pdf', url: '' });
@@ -344,10 +349,6 @@
                 await updateDoc(userRef, updateData);
             }
         };
-
-        // ---------------------------------------------------------
-        // UI COMPONENTS
-        // ---------------------------------------------------------
 
         const ProfileModal = ({ user, onClose, onUpdateProfile, onShowNotification }) => {
             const [name, setName] = useState(user.name || '');
@@ -707,7 +708,7 @@
                 } else {
                     const fileName = typeof fileData === 'string' ? fileData : (fileData?.name || 'Default.pdf');
                     const bom = "\uFEFF";
-                    const content = bom + "เนื้อหาข้อสอบวิชานี้ (หมายเหตุ: ข้อสอบเก่าที่ไม่ได้เชื่อม Firebase Storage)\n\nชื่อชุดข้อสอบ: " + fileName;
+                    const content = bom + "เนื้อหาข้อสอบวิชานี้ (หมายเหตุ: ระบบปัจจุบันบันทึกเฉพาะชื่อไฟล์ หากต้องการให้โหลดไฟล์จริงที่ครูอัปโหลด ต้องเปิดการเข้าถึง Storage ของ Firebase ด้วย)\n\nชื่อชุดข้อสอบ: " + fileName;
                     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement("a");
@@ -989,7 +990,6 @@
                 link.setAttribute("download", "student_template.csv");
                 document.body.appendChild(link);
                 link.click();
-                document.body.removeChild(link);
             };
 
             const handleAddStudent = async (e) => {
@@ -1059,7 +1059,7 @@
                     setNewTitle(''); setNewDesc(''); setNewDuration(60); setSelectedStudentIds([]); setExamFiles([]); setAllowLate(false);
                     loadData();
                 } catch (err) {
-                    onShowNotification('เกิดข้อผิดพลาดในการสร้างข้อสอบ', 'error');
+                    onShowNotification(err.message, 'error');
                 } finally {
                     setIsLoading(false);
                 }
@@ -1108,7 +1108,6 @@
                 document.body.removeChild(link);
             };
 
-            // Enrollment Filtering Logic
             const searchedStudents = students.filter(s => 
                 s.name.toLowerCase().includes(searchStudent.toLowerCase()) || 
                 s.username.toLowerCase().includes(searchStudent.toLowerCase())
@@ -1389,10 +1388,10 @@
                                                                 {results.map((result, idx) => (
                                                                     <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                                                                         <td className="p-6 text-base font-bold text-slate-600">{result.studentId}</td>
-                                                                    <td className="p-6 font-extrabold text-slate-800 text-lg">{result.studentName}</td>
-                                                                    <td className="p-6 text-base font-bold text-slate-500">{result.grade}/{result.room}</td>
-                                                                    <td className="p-6 text-base font-bold text-indigo-600"><span className="bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">{typeof result.assignedFile === 'string' ? result.assignedFile : result.assignedFile?.name}</span></td>
-                                                                    <td className="p-6">
+                                                                        <td className="p-6 font-extrabold text-slate-800 text-lg">{result.studentName}</td>
+                                                                        <td className="p-6 text-base font-bold text-slate-500">{result.grade}/{result.room}</td>
+                                                                        <td className="p-6 text-base font-bold text-indigo-600"><span className="bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">{typeof result.assignedFile === 'string' ? result.assignedFile : result.assignedFile?.name}</span></td>
+                                                                        <td className="p-6">
                                                                             <span className={`px-4 py-2 rounded-full text-sm font-bold inline-block border shadow-sm ${
                                                                                 result.status === 'ส่งแล้ว' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                                                                                 result.status === 'ส่งแล้ว (ล่าช้า)' ? 'bg-amber-50 text-amber-700 border-amber-300' : 
@@ -1425,7 +1424,7 @@
                                                                                             }
                                                                                         }}
                                                                                     />
-                                                                                    <button style={{display: 'none'}} onClick={(e) => {handleSaveScore(result.submission.id, e.target.previousSibling.value); e.currentTarget.style.display='none';}} className="w-10 h-10 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 items-center justify-center shadow-md active:scale-95 transition-all">
+                                                                                    <button style={{display: 'none'}} onClick={(e) => {handleSaveScore(result.submission.id, e.target.previousSibling.value); e.currentTarget.style.display='none';}} className="w-10 h-10 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center justify-center shadow-md active:scale-95 transition-all">
                                                                                         <i className="fa-solid fa-floppy-disk text-lg"></i>
                                                                                     </button>
                                                                                 </div>
@@ -1637,14 +1636,25 @@
             const [showInstructions, setShowInstructions] = useState(false);
             const [notification, setNotification] = useState({ message: '', type: '' });
             const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+            const [firebaseError, setFirebaseError] = useState(null);
 
             useEffect(() => {
                 const initAuth = async () => {
                     try {
-                        await signInAnonymously(auth);
-                        setIsFirebaseReady(true);
+                        const unsubscribe = onAuthStateChanged(auth, (user) => {
+                            if (user) {
+                                setIsFirebaseReady(true);
+                                setFirebaseError(null);
+                            } else {
+                                signInAnonymously(auth).catch(error => {
+                                    console.error("Firebase Auth Error:", error);
+                                    setFirebaseError(error.message);
+                                });
+                            }
+                        });
+                        return () => unsubscribe();
                     } catch (error) {
-                        console.error("Firebase Auth Error:", error);
+                        setFirebaseError(error.message);
                     }
                 };
                 initAuth();
@@ -1695,6 +1705,28 @@
                 setActiveSession(session);
                 return session;
             };
+
+            // ดักจับและแสดงหน้าจอ Error หาก Firebase เชื่อมต่อไม่ได้ หรือติดปัญหา Permissions
+            if (firebaseError) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-10">
+                        <div className="bg-white p-10 rounded-3xl shadow-xl border-t-4 border-rose-500 max-w-2xl text-center">
+                            <i className="fa-solid fa-triangle-exclamation text-6xl text-rose-500 mb-6"></i>
+                            <h2 className="text-3xl font-extrabold text-slate-800 mb-4">ไม่สามารถเชื่อมต่อฐานข้อมูลได้</h2>
+                            <div className="bg-slate-100 p-6 rounded-2xl text-left border border-slate-200 mb-6">
+                                <p className="text-slate-600 font-bold mb-2">สาเหตุของข้อผิดพลาด:</p>
+                                <code className="text-rose-600 font-mono break-words">{firebaseError}</code>
+                            </div>
+                            <p className="text-slate-500 font-bold text-lg mb-8">
+                                กรุณาตรวจสอบว่าคุณได้ตั้งค่า <strong>Firebase Rules เป็น Test Mode</strong> หรือเปิดใช้งาน <strong>Anonymous Authentication</strong> แล้วหรือยัง
+                            </p>
+                            <button onClick={() => window.location.reload()} className="px-8 py-4 bg-slate-800 text-white rounded-xl font-extrabold hover:bg-slate-700 transition-all">
+                                ลองใหม่อีกครั้ง
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
 
             if (!isFirebaseReady) {
                 return (

@@ -569,8 +569,46 @@
             const loadData = async () => { setIsPageLoading(true); try { const [examsData, studentsData] = await Promise.all([api.getExams(user.id, user.role), api.getStudents()]); setExams(examsData); setStudents(studentsData); } catch (error) { onShowNotification('โหลดข้อมูลล้มเหลว', 'error'); } finally { setIsPageLoading(false); } };
             const handleUpdateStudent = async (e) => { e.preventDefault(); setIsLoading(true); try { await api.updateUser(editingStudent.id, { name: editingStudent.name, password: editingStudent.password, grade: editingStudent.grade, room: editingStudent.room }); onShowNotification('บันทึกข้อมูลเรียบร้อย', 'success'); setStudentView('list'); setEditingStudent(null); loadData(); } catch (err) { onShowNotification(err.message, 'error'); } finally { setIsLoading(false); } };
             const handleAddStudent = async (e) => { e.preventDefault(); setIsLoading(true); try { await api.addStudent({ username: newStudentUsername, name: newStudentName, password: newStudentPassword, grade: newStudentGrade, room: newStudentRoom }); onShowNotification('เพิ่มข้อมูลนักเรียนเรียบร้อย', 'success'); setStudentView('list'); setNewStudentUsername(''); setNewStudentName(''); setNewStudentPassword('1234'); loadData(); } catch (err) { onShowNotification(err.message, 'error'); } finally { setIsLoading(false); } };
-            const handleBulkImport = async () => { if (!csvData) return; setIsLoading(true); try { const rows = csvData.split('\n').map(row => row.trim()).filter(row => row); const startIndex = rows[0].includes('รหัส') ? 1 : 0; const studentsToAdd = []; for (let i = startIndex; i < rows.length; i++) { const cols = rows[i].split(',').map(c => c.trim()); if (cols.length >= 2) { studentsToAdd.push({ username: cols[0], name: cols[1], grade: cols[2] || '-', room: cols[3] || '-', password: cols[4] || '1234' }); } } const count = await api.bulkAddStudents(studentsToAdd); onShowNotification(`นำเข้าข้อมูลสำเร็จ ${count} รายการ`, 'success'); setStudentView('list'); setCsvData(''); loadData(); } catch (err) { onShowNotification(err.message, 'error'); } finally { setIsLoading(false); } };
             
+            const handleBulkImport = async () => { 
+                if (!csvData) return; 
+                setIsLoading(true); 
+                try { 
+                    const rows = csvData.split('\n').map(row => row.trim()).filter(row => row); 
+                    const startIndex = rows[0].includes('รหัส') ? 1 : 0; 
+                    const studentsToAdd = []; 
+                    for (let i = startIndex; i < rows.length; i++) { 
+                        const cols = rows[i].split(',').map(c => c.trim()); 
+                        if (cols.length >= 2) { 
+                            studentsToAdd.push({ username: cols[0], name: cols[1], grade: cols[2] || '-', room: cols[3] || '-', password: cols[4] || '1234' }); 
+                        } 
+                    } 
+                    const count = await api.bulkAddStudents(studentsToAdd); 
+                    onShowNotification(`นำเข้าข้อมูลสำเร็จ ${count} รายการ`, 'success'); 
+                    setStudentView('list'); 
+                    setCsvData(''); 
+                    loadData(); 
+                } catch (err) { 
+                    onShowNotification(err.message, 'error'); 
+                } finally { 
+                    setIsLoading(false); 
+                } 
+            };
+            
+            // ฟังก์ชันดาวน์โหลดเทมเพลต CSV
+            const handleDownloadTemplate = (e) => {
+                e.preventDefault();
+                const bom = "\uFEFF";
+                const template = bom + "รหัสผู้ใช้,ชื่อ-สกุล,ชั้น,ห้อง,รหัสผ่าน\n1001,นายเรียนดี มีวินัย,ม.4,1,1234\n1002,นางสาวตั้งใจ ใฝ่รู้,ม.4,1,1234";
+                const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", "student_template.csv");
+                document.body.appendChild(link);
+                link.click();
+            };
+
             const handleCreateExam = async (e) => {
                 e.preventDefault();
                 if(selectedStudentIds.length === 0) return onShowNotification('กรุณาระบุผู้มีสิทธิ์สอบอย่างน้อย 1 ราย', 'error');
@@ -749,10 +787,10 @@
                                         )}
 
                                         {studentView === 'create' && (
-                                            <div className="max-w-xl mx-auto animate-in fade-in bg-white border border-slate-200 rounded-xl p-6">
+                                            <div className="max-w-xl mx-auto animate-in fade-in bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
                                                 <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-3">
-                                                    <div className="flex items-center"><button onClick={() => setStudentView('list')} className="w-8 h-8 rounded hover:bg-slate-100 text-slate-500 flex items-center justify-center mr-3 transition-colors"><i className="fa-solid fa-arrow-left"></i></button><h2 className="text-base font-bold text-slate-800">เพิ่มข้อมูลนักเรียน</h2></div>
-                                                    <div className="bg-slate-100 p-1 rounded flex"><button onClick={() => setStudentInputMode('single')} className={`px-3 py-1 text-xs font-medium rounded transition-colors ${studentInputMode === 'single' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>เพิ่มทีละรายการ</button><button onClick={() => setStudentInputMode('bulk')} className={`px-3 py-1 text-xs font-medium rounded transition-colors ${studentInputMode === 'bulk' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>นำเข้า CSV</button></div>
+                                                    <div className="flex items-center"><button onClick={() => setStudentView('list')} className="w-8 h-8 rounded-full bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 flex items-center justify-center mr-3 transition-colors"><i className="fa-solid fa-arrow-left"></i></button><h2 className="text-base font-bold text-slate-800">เพิ่มข้อมูลนักเรียน</h2></div>
+                                                    <div className="bg-slate-100 p-1 rounded-lg flex"><button onClick={() => setStudentInputMode('single')} className={`px-3 py-1 text-xs font-medium rounded transition-colors ${studentInputMode === 'single' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>เพิ่มทีละรายการ</button><button onClick={() => setStudentInputMode('bulk')} className={`px-3 py-1 text-xs font-medium rounded transition-colors ${studentInputMode === 'bulk' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>นำเข้า CSV</button></div>
                                                 </div>
 
                                                 {studentInputMode === 'single' ? (
@@ -765,7 +803,7 @@
                                                     </form>
                                                 ) : (
                                                     <div>
-                                                        <div className="bg-slate-50 p-4 rounded border border-slate-200 mb-4 flex justify-between items-center text-sm"><div><span className="font-semibold text-slate-700 block mb-1">1. เอกสารต้นแบบ (Template)</span><span className="text-xs text-slate-500">รูปแบบไฟล์ CSV สำหรับกรอกข้อมูล</span></div><button onClick={handleDownloadTemplate} className="px-3 py-1.5 bg-white border border-slate-300 text-slate-600 rounded hover:bg-slate-50 transition-colors text-xs">ดาวน์โหลด</button></div>
+                                                        <div className="bg-slate-50 p-4 rounded border border-slate-200 mb-4 flex justify-between items-center text-sm"><div><span className="font-semibold text-slate-700 block mb-1">1. เอกสารต้นแบบ (Template)</span><span className="text-xs text-slate-500">รูปแบบไฟล์ CSV สำหรับกรอกข้อมูล</span></div><button onClick={handleDownloadTemplate} className="px-3 py-1.5 bg-white border border-slate-300 text-slate-600 rounded hover:bg-slate-50 transition-colors text-xs font-medium"><i className="fa-solid fa-download mr-1"></i> ดาวน์โหลด</button></div>
                                                         <div className="bg-slate-50 p-4 rounded border border-slate-200 mb-4"><span className="font-semibold text-slate-700 block mb-2 text-sm">2. นำเข้าข้อมูลเอกสาร</span><input type="file" accept=".csv" onChange={(e) => { const file = e.target.files[0]; if(file){ const reader = new FileReader(); reader.onload=(event)=>setCsvData(event.target.result); reader.readAsText(file); } }} className="w-full text-xs bg-white border border-slate-200 rounded p-2" /></div>
                                                         <button onClick={handleBulkImport} disabled={!csvData || isLoading} className="w-full py-2.5 primary-btn rounded font-medium text-sm flex justify-center items-center disabled:opacity-50">{isLoading ? <div className="spinner w-4 h-4 border-white"></div> : 'ดำเนินการนำเข้าข้อมูล'}</button>
                                                     </div>
@@ -799,7 +837,7 @@
             const handleEnterExamRoom = (exam) => { setActiveExam(exam); setActiveSession(exam.session || null); setCurrentView('exam'); };
             const handleStartSession = async (exam) => { const session = await api.startSession(user.id, exam.id); setActiveSession(session); return session; };
 
-            if (!isReady) return (<div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="spinner border-blue-600 border-t-transparent" style={{width:'40px',height:'40px'}}></div></div>);
+            if (!isReady) return (<div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="spinner-blue w-10 h-10"></div></div>);
 
             return (
                 <div className="min-h-screen">
